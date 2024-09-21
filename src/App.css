@@ -36,3 +36,19 @@
     transform: rotate(360deg);
   }
 }
+
+.bg-navColor {
+  background-image: linear-gradient(to right,#3c0abb,#4623f2 )
+  }
+
+  .centered-container {
+    display: flex;
+    justify-content: center; /* Center horizontally */
+    /* align-items: center; Center vertically */
+    /* height: 100vh;  Full viewport height */
+  }
+  
+  .selector-container {
+    text-align: center; /* Center text within the selector container */
+  }
+  

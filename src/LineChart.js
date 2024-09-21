@@ -1,237 +1,388 @@
-// src/components/LineChart.js
-import { Chart } from 'react-google-charts';
 import React, { useState } from 'react';
+import { Chart } from 'react-google-charts';
+import { useStreet } from './components/StreetSelector';
+import { useMultipleStreets } from './components/MultiStreetSelector';
+import { Form, Row, Col } from 'react-bootstrap';
+import { chartOptionsGeneric} from './charts/chartOptions'; 
 
-//const streetNames = ["W PLANO PKWY", "RIDGEVIEW DR", "COMMUNICATIONS PKWY"];
+const processTemperatureData = (data, selectedStreets) => {
+  // Create headers dynamically based on the selected streets
+  const headers = ["Date", 
+    ...selectedStreets.flatMap(street => [
+      `${street}`
+    ])
+  ];
 
+  // Group data by date for all selected streets
+  const groupedData = data.reduce((acc, entry) => {
+    const date = new Date(entry.DATE).toDateString();
+    if (!acc[date]) {
+      acc[date] = { date: new Date(entry.DATE) };
+    }
+    selectedStreets.forEach(street => {
+      if (!acc[date][street]) {
+        acc[date][street] = {
+          temperature: entry.Street === street ? entry["Temperature"] : null
+        };
+      }
+    });
+    return acc;
+  }, {});
 
-const processTempAndPHData = (data) => {
-  // const headers = ["Date", "Total Chlorine Residual", "Free Chlorine", "Monochloramine", "Free Ammonia", "Temperature", "pH", "Nitrates", "Nitrites", "Total Alkalinity (as CaCO3)"];
-  const headers = ["Date", "Temperature (Celcius)"];
-  const rows = data.map((entry) => [
-    new Date(entry.DATE),
-    entry["Temperature"]
-  ]);
+  // Create rows with temperature and pH data for each street per date
+  const rows = [];
+  Object.keys(groupedData).forEach(date => {
+    const row = [new Date(date)];
+    selectedStreets.forEach(street => {
+      row.push(groupedData[date][street]?.temperature || null); // Temperature
+    });
+    rows.push(row);
+  });
 
   return [headers, ...rows];
 };
 
-const processPhData = (data) => {
-  // const headers = ["Date", "Total Chlorine Residual", "Free Chlorine", "Monochloramine", "Free Ammonia", "Temperature", "pH", "Nitrates", "Nitrites", "Total Alkalinity (as CaCO3)"];
-  const headers = ["Date", "pH"];
-  const rows = data.map((entry) => [
-    new Date(entry.DATE),
-    entry.pH,
-  ]);
+// Group data by Street name
+const groupedLocationDataByStreet = (data) => {
+  return data.reduce((acc, entry) => {
+    const street = entry.Street;
+    const locationType = entry['Location Type/#'];
+
+    if (!acc[street]) {
+      acc[street] = new Set(); // Use Set to avoid duplicates
+    }
+    acc[street].add(locationType);
+    return acc;
+  }, {});
+};
+
+const processPhData = (data, selectedStreets) => {
+  // Create headers dynamically based on the selected streets
+  const headers = ["Date", ...selectedStreets.map(street => `${street} - pH`)];
+  
+  // Group data by date for all selected streets
+  const groupedData = data.reduce((acc, entry) => {
+    const date = new Date(entry.DATE).toDateString();
+    if (!acc[date]) {
+      acc[date] = { date: new Date(entry.DATE) };
+    }
+    selectedStreets.forEach(street => {
+      if (!acc[date][street]) {
+        acc[date][street] = entry.Street === street ? entry.pH : null;
+      }
+    });
+    return acc;
+  }, {});
+
+  // Create rows with pH data for each street per date
+  const rows = [];
+  Object.keys(groupedData).forEach(date => {
+    const row = [new Date(date)];
+    selectedStreets.forEach(street => {
+      row.push(groupedData[date][street] || null); // Fill with null if no data
+    });
+    rows.push(row);
+  });
 
   return [headers, ...rows];
 };
 
 
 const processChlorineData = (data) => {
-  // const headers = ["Date", "Total Chlorine Residual", "Free Chlorine", "Monochloramine", "Free Ammonia", "Temperature", "pH", "Nitrates", "Nitrites", "Total Alkalinity (as CaCO3)"];
   const headers = ["Date", "Total Chlorine Residual", "Monochloramine"];
   const rows = data.map((entry) => [
     new Date(entry.DATE),
     entry["Total Chlorine Residual"],
     entry.Monochloramine,
   ]);
+  return [headers, ...rows];
+};
+// Updated processChlorineData function
+const processChlorineDataMulti = (data, selectedStreets) => {
+  // Create headers with a single label for each street's data
+  const headers = ["Date", ...selectedStreets.flatMap(street => [`${street}`])];
+
+  // Group data by date for all selected streets
+  const groupedData = data.reduce((acc, entry) => {
+    console.log(typeof(entry.DATE));
+    const date = new Date(entry.DATE);
+    if (!acc[date]) {
+      acc[date] = { date: new Date(entry.DATE) };
+    }
+    acc[date][entry.Street] = {
+      "Total Chlorine Residual": entry["Total Chlorine Residual"],
+      // Monochloramine: entry.Monochloramine
+    };
+    return acc;
+  }, {});
+
+  // Create rows with data for each street per date
+  const rows = [];
+  Object.keys(groupedData).forEach((date) => {
+    const row = [new Date(date)];
+    selectedStreets.forEach((street) => {
+      const streetData = groupedData[date][street] || {};
+      row.push(streetData["Total Chlorine Residual"] || null); // Fill with null if no data
+      // row.push(streetData.Monochloramine || null);
+    });
+    rows.push(row);
+  });
 
   return [headers, ...rows];
 };
 
-const processFreeAmmoniaData = (data) => {
-  // const headers = ["Date", "Total Chlorine Residual", "Free Chlorine", "Monochloramine", "Free Ammonia", "Temperature", "pH", "Nitrates", "Nitrites", "Total Alkalinity (as CaCO3)"];
-  const headers = ["Date", "Free Ammonia"];
-  const rows = data.map((entry) => [
-    new Date(entry.DATE),
-    entry["Free Ammonia"],
-  ]);
+const processFreeChlorineData = (data, selectedStreets) => {
+  // Create headers with a single label for each street's data
+  const headers = ["Date", ...selectedStreets.flatMap(street => [`${street}`])];
 
-  return [headers,...rows];
+  // Group data by date for all selected streets
+  const groupedData = data.reduce((acc, entry) => {
+    console.log(typeof(entry.DATE));
+    const date = new Date(entry.DATE);
+    if (!acc[date]) {
+      acc[date] = { date: new Date(entry.DATE) };
+    }
+    acc[date][entry.Street] = {
+      "Free Chlorine": entry["Free Chlorine"],
+      // Monochloramine: entry.Monochloramine
+    };
+    return acc;
+  }, {});
+
+  // Create rows with data for each street per date
+  const rows = [];
+  Object.keys(groupedData).forEach((date) => {
+
+    const row = [new Date(date)];
+    selectedStreets.forEach((street) => {
+      const streetData = groupedData[date][street] || {};
+      row.push(streetData["Free Chlorine"] || null); // Fill with null if no data
+      // row.push(streetData.Monochloramine || null);
+    });
+    rows.push(row);
+  });
+
+  return [headers, ...rows];
 };
 
-const processNitritesData = (data) => {
-  // const headers = ["Date", "Total Chlorine Residual", "Free Chlorine", "Monochloramine", "Free Ammonia", "Temperature", "pH", "Nitrates", "Nitrites", "Total Alkalinity (as CaCO3)"];
-  const headers = ["Date", "Nitrites"];
-  const rows = data.map((entry) => [
-    new Date(entry.DATE),
-    entry["Nitrites"],
-  ]);
+const processFreeAmmoniaData = (data, selectedStreets) => {
+  // Create headers dynamically based on the selected streets
+  const headers = ["Date", 
+    ...selectedStreets.map(street => `${street}`)
+  ];
 
-  return [headers,...rows];
+  // Group data by date for all selected streets
+  const groupedData = data.reduce((acc, entry) => {
+    const date = new Date(entry.DATE).toDateString();
+    if (!acc[date]) {
+      acc[date] = { date: new Date(entry.DATE) };
+    }
+    selectedStreets.forEach(street => {
+      if (!acc[date][street]) {
+        acc[date][street] = entry.Street === street ? entry["Free Ammonia"] : null;
+      }
+    });
+    return acc;
+  }, {});
+
+  // Create rows with Free Ammonia data for each street per date
+  const rows = [];
+  Object.keys(groupedData).forEach(date => {
+    const row = [new Date(date)];
+    selectedStreets.forEach(street => {
+      row.push(groupedData[date][street] || null); // Free Ammonia
+    });
+    rows.push(row);
+  });
+
+  return [headers, ...rows];
 };
 
-const processTotalAlkalinityAs_CaCO3 = (data) => {
-  // const headers = ["Date", "Total Chlorine Residual", "Free Chlorine", "Monochloramine", "Free Ammonia", "Temperature", "pH", "Nitrates", "Nitrites", "Total Alkalinity (as CaCO3)"];
-  const headers = ["Date", "Total Alkalinity (as CaCO3)"];
-  const rows = data.map((entry) => [
-    new Date(entry.DATE),
-    entry["Total Alkalinity (as CaCO3)"],
-  ]);
 
-  return [headers,...rows];
+const processNitritesData = (data, selectedStreets) => {
+  // Create headers dynamically based on the selected streets
+  const headers = ["Date", 
+    ...selectedStreets.map(street => `${street}`)
+  ];
+
+  // Group data by date for all selected streets
+  const groupedData = data.reduce((acc, entry) => {
+    const date = new Date(entry.DATE).toDateString();
+    if (!acc[date]) {
+      acc[date] = { date: new Date(entry.DATE) };
+    }
+    selectedStreets.forEach(street => {
+      if (!acc[date][street]) {
+        acc[date][street] = entry.Street === street ? entry["Nitrites"] : null;
+      }
+    });
+    return acc;
+  }, {});
+
+  // Create rows with Nitrites data for each street per date
+  const rows = [];
+  Object.keys(groupedData).forEach(date => {
+    const row = [new Date(date)];
+    selectedStreets.forEach(street => {
+      row.push(groupedData[date][street] || null); // Nitrites
+    });
+    rows.push(row);
+  });
+
+  return [headers, ...rows];
 };
 
-const options = {
-  title: 'Chlorine Quality Over Time',
-  curveType: 'function',
-  legend: { position: 'bottom' },
+
+const processTotalAlkalinityAs_CaCO3 = (data, selectedStreets) => {
+  // Create headers dynamically based on the selected streets
+  const headers = ["Date", 
+    ...selectedStreets.map(street => `${street}`)
+  ];
+
+  // Group data by date for all selected streets
+  const groupedData = data.reduce((acc, entry) => {
+    const date = new Date(entry.DATE).toDateString();
+    if (!acc[date]) {
+      acc[date] = { date: new Date(entry.DATE) };
+    }
+    selectedStreets.forEach(street => {
+      if (!acc[date][street]) {
+        acc[date][street] = entry.Street === street ? entry["Total Alkalinity (as CaCO3)"] : null;
+      }
+    });
+    return acc;
+  }, {});
+
+  // Create rows with Total Alkalinity data for each street per date
+  const rows = [];
+  Object.keys(groupedData).forEach(date => {
+    const row = [new Date(date)];
+    selectedStreets.forEach(street => {
+      row.push(groupedData[date][street] || null); // Total Alkalinity (as CaCO3)
+    });
+    rows.push(row);
+  });
+
+  return [headers, ...rows];
 };
 
 
 
 const LineChart = ({ data }) => {
-  const [selectedStreet, setSelectedStreet] = useState(streetNames[0]);
-  const filteredData = data.filter((entry) => entry.Street === selectedStreet);
+  const [chartType, setChartType] = useState('LineChart');
 
-  const tempAndPHChartData = processTempAndPHData(filteredData);
-  const chlorineChartData = processChlorineData(filteredData);
-  const phChartData = processPhData(filteredData);
-  const freeAmmoniaData = processFreeAmmoniaData(filteredData);
-  const nitritesData = processNitritesData(filteredData);
-  const totalAlkalinityAs_CaCO3Data = processTotalAlkalinityAs_CaCO3(filteredData);
-
-  const handleStreetChange = (event) => {
-    setSelectedStreet(event.target.value);
-  };
+  const { selectedStreet } = useStreet();
+  const { selectedStreets } = useMultipleStreets();
+  //const filteredData = data.filter((entry) => entry.Street === selectedStreet);
+// Filter data for multiple selected streets
+const filteredData = data.filter((entry) =>
+  selectedStreets.includes(entry.Street)
+);
+  const tempAndPHChartData = processTemperatureData(filteredData, selectedStreets);
+  const chlorineChartData = processChlorineDataMulti(filteredData, selectedStreets);
+  const freeChlorineChartData = processFreeChlorineData(filteredData, selectedStreets);
+  
+  const phChartData = processPhData(filteredData, selectedStreets);
+  const freeAmmoniaData = processFreeAmmoniaData(filteredData, selectedStreets);
+  const nitritesData = processNitritesData(filteredData, selectedStreets);
+  const totalAlkalinityAs_CaCO3Data = processTotalAlkalinityAs_CaCO3(filteredData, selectedStreets);
+  const groupedLocationdata = groupedLocationDataByStreet(filteredData);
 
   return (
     <div>
-      <label htmlFor="street-select">Select Street:</label>
-      <select id="street-select" value={selectedStreet} onChange={handleStreetChange}>
-        {streetNames.map((street) => (
-          <option key={street} value={street}>{street}</option>
-        ))}
-      </select>
       <div>
-        <Chart
-          chartType="LineChart"
-          width="100%"
-          height="800px"
-          data={chlorineChartData}
-          options={options}
-        />
-
+        {selectedStreets && selectedStreets.length > 0 ? (
+          1==1
+        ) : (
+          <p></p>
+        )}
       </div>
-      <div>
+      {selectedStreets  && selectedStreets.length > 0 ? (
+        <div>
+      {/* <Row className="mb-2">
+        <Col className="d-flex justify-content-end pr-3"> 
+    <div className="d-flex align-items-center centered-container">
+          <label className="mr-2">Select Chart Type:</label>
+          <Form.Group controlId="chartTypeSelect" className="mb-0">
+            <Form.Control
+              as="select"
+              value={chartType}
+              onChange={(e) => setChartType(e.target.value)}
+            >
+              <option value="LineChart">Line Chart</option>
+              <option value="Bar">Bar Chart</option>
+              <option value="Scatter">Scatter</option>
+            </Form.Control>
+          </Form.Group>
+          </div>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        </Col>
+      </Row> */}
+        <div className="text-center mb-4 border-bottom border-info pb-2"> {/* Added maxWidth */}
+          <Chart
+            chartType={chartType}
+            width="100%"
+            height="800px"
+            data={chlorineChartData}
+            options={chartOptionsGeneric( 'Total Chlorine Residual (mg/L)', selectedStreets)}
+            
+          />
         <Chart
-          chartType="LineChart"
-          width="100%"
-          height="800px"
-          data={phChartData}
-          options={options}
+            chartType={chartType}
+            width="100%"
+            height="800px"
+            data={phChartData}
+            options={chartOptionsGeneric( 'pH Value', selectedStreets)}
         />
-      </div>
-      <div>
         <Chart
-          chartType="LineChart"
+          chartType={chartType}
           width="100%"
           height="800px"
           data={tempAndPHChartData}
-          options={options}
+          options={chartOptionsGeneric('Temperatures (Celcius)', selectedStreets)}
         />
-      </div>
-      <div>
         <Chart
-          chartType="LineChart"
+          chartType={chartType}
           width="100%"
           height="800px"
           data={freeAmmoniaData}
-          options={options}
+          options={chartOptionsGeneric('Free Ammonia (mg/L)', selectedStreets)}
         />
-      </div>
-      <div>
         <Chart
-          chartType="LineChart"
+          chartType={chartType}
           width="100%"
           height="800px"
           data={nitritesData}
-          options={options}
+          options={chartOptionsGeneric('Nitrites (mg/L)', selectedStreets)}
         />
-      </div>
-      <div>
         <Chart
-          chartType="LineChart"
+          chartType={chartType}
           width="100%"
           height="800px"
           data={totalAlkalinityAs_CaCO3Data}
-          options={options}
+          options={chartOptionsGeneric('Total Alkalinity (as CaCO3) mg/L', selectedStreets)}
         />
-      </div>
+<div>
+    <h3 style={{color:'Navy'}}>Location Type by Street</h3>
+    <ul className="list-group">
+  {Object.keys(groupedLocationdata).map((street) => (
+  <li key={street} className="list-group-item">
+    <h5 className="mb-1"><strong>{street}</strong></h5>
+    <p className="mb-1">
+      {Array.from(groupedLocationdata[street]).join(', ')}
+    </p>
+  </li>
+  ))}
+  </ul>
+
+  </div>
+        </div>
+        </div>
+      ) : (
+        <p></p>
+      )}
     </div>
   );
 };
-const raw_streetNames = ['RIDGEVIEW DR', 'W 15TH ST', 'DEL SOL DR', 'ALMA DR',
-  'Sage Brush Trl', 'W PLANO PKWY', 'Sandy Trail Ln', 'Louis Dr',
-  'Arbor Vista Dr', 'Mt Vernon Way', 'Walters Dr', 'Simsbury Dr',
-  'Randall Way', 'Milton Ln', 'Bonsai Dr', 'Harrington Dr',
-  'Geneva Ln', 'Shoal Creek Cir', 'The Giovanna', 'BROWNING DR',
-  'International Pkwy', 'Wynview Dr', 'INTERNATIONAL PKWY',
-  'BISHOP RD', 'COMMUNICATIONS PKWY', 'HAGGARD ST', 'LOTUS DR',
-  'Shetland Rd', 'Cleveland Dr', 'Pinehurst Dr', 'Canterbury Dr',
-  'Del Sol Dr', 'Piedra Dr', 'Stonemoss Dr', 'Chadbourne Dr',
-  'Steamboat Dr', 'Chicota Dr', 'Bass Dr', 'N Medalist Cir',
-  'Alma Dr', 'Mapleshade Ln', 'Ridgeview Dr', 'CENTRAL PKY E',
-  'Jasmine Ln', 'W 15th St', 'Hideaway Ln', 'Brookshire Dr',
-  'Regal Rd', 'Edwards Dr', 'Burnet Dr', 'Smokey Dr', 'Stacia Dr',
-  'Communications Pkwy', 'Wooded Cove Dr', 'Laurel Ln', 'Sherrye Dr',
-  'Bishop Rd', 'Browning Dr', 'Jenning Ct', 'W Plano Pkwy',
-  'HAYFIELD DR', 'California Trl', 'Bull Run Dr', 'Patrick Ln',
-  'Shantara Ln', 'Camp Wood Ct', 'Sunflower Ln', 'Deer Park Ln',
-  'Case Dr', 'Spring Mountain Dr', 'Lake Crest Ln', 'Vanderbilt Dr',
-  'Appalachian Ct', 'Aimpoint Dr', 'Glyndon Dr', 'Lakestream Dr',
-  'Sandhurst Dr', 'Mellville Dr', 'Croston Dr', 'Callaway Dr',
-  'Crystal Way', 'Medina Dr', 'OCEANVIEW DR', 'FLICKER LN',
-  'Lavaca Dr', 'Covinton Ln', 'Shinnery Oak Dr', 'TALBERT DR',
-  'Brimwood Dr', 'Gallant Fox Ln', 'Bender Trl', 'Early Morn Dr',
-  'Sterling Ln', 'Parkside Dr', 'Remington Dr', 'Loch Haven Dr',
-  'Heather Hill Ln', 'Downing Dr', 'Santana Ln', 'Leigh Dr',
-  'Cumberland Trl', 'Valdez Ct', 'Bandera Dr', 'Knob Hill Dr',
-  'Lazy Oak Ln', 'Hartford Dr', 'Dartmouth Dr', 'Fall Wheat Dr',
-  'Capital Ave', 'Meadowbrook Dr', 'Tilden Dr', 'Winchester Dr',
-  'Grandview Dr', 'Cherbourg Dr', 'Lake Shore Ln', 'Tawakoni Ln',
-  'Arbor Downs Dr', 'Cup Dr', 'Old Orchard Dr', 'Country Club Dr',
-  'Oak Tree Dr', 'Wingren Dr', 'Misty Haven Ln', 'Cedar Grove Cir',
-  'Seabrook Dr', 'Rockcreek Ln', 'Peek Dr', 'Sandia Dr', 'Bengal Ln',
-  'Muirfield Cir', 'Steven Dr', 'Snidow Dr', 'Redfield Dr',
-  'Liverpool Dr', 'Vienna Dr', 'Baxter Dr', 'FULLERTON DR',
-  'RAINWOOD DR', 'Red Wolf Ln', 'Apple Tree Dr', 'Eagle Vail Dr',
-  'Streamwood Ln', 'Bridle Bend Trl', 'Bridge View Ln', 'Arlen Dr',
-  'Dundee Ln', 'Matterhorn Dr', 'Claymore Dr', 'Canyon Valley Trl',
-  'Arbuckle Dr', 'Evans Dr', 'Bluffton Dr', 'Aldridge Dr',
-  'Berwyn Dr', 'Madera Ct', 'HYANNIS ST', 'Pebble Beach Dr',
-  'Amazon Dr', 'Sacramento Ter', 'Wimbledon Ln', 'Lombardy Dr',
-  'Yellowstone Dr', 'Japonica Ln', 'Covered Wagon Dr',
-  'Charter Oak Dr', 'Kentfield Ln', 'Lottie Ln', 'Fountain Head Dr',
-  'Biltmore Pl', 'Adrian Way', 'Dunwick Dr', 'Sako Dr',
-  'Endicott Dr', 'Cotton Belt Ave', 'Mullins Dr', 'Ledgemont Dr',
-  'Mossvine Dr', 'Lawndale Dr', 'Nightfall Dr', 'Ridgehaven Dr',
-  'Whitehaven Dr', 'Saltburn Dr', 'Plymouth Dr', 'Piedmont Dr',
-  'N Cypress Cir', 'Hunters Creek Dr', 'Northcrest Dr', 'P Ave',
-  'Tangerine Ln', 'BIANCA LN', 'TURNER LN', 'St Thomas Dr',
-  'Fairmount Dr', 'Misted Breeze Dr', 'Whiffletree Dr',
-  'Whittingdon Pl', 'Cross Bend Rd', 'Toppingham St', 'Basalt Dr',
-  'Swanson Dr', 'Wolf Ridge Dr', 'Riverhill Dr', 'Harvest Glen Dr',
-  'Lochridge Dr', 'Nocona Dr', 'Westridge Dr', 'Armstrong Dr',
-  'Schooner Dr', 'Rockbrook Dr', 'Merriman Dr', 'Camino Dr',
-  'Buckboard Dr', 'Reunion Dr', 'Forest Park Rd', 'Winding Wood Trl',
-  'Buchanan Dr', 'Raintree Dr', 'Shady Ln', 'Hawkhurst Dr',
-  'Wyvonnes Way', 'Mandevilla Dr', 'SHERWOOD DR', 'Big Sky Dr',
-  'Montrose Dr', 'Kingsbury Dr', 'San Patricio Dr', 'Kimble Dr',
-  'Duval Dr', 'Angus Dr', 'Brycewood Ln', 'Cimmaron Dr', 'Gent Dr',
-  'Flintstone Dr', 'Ruthridge Dr', 'Panther Ridge Ln',
-  'W SPRING CREEK PKWY', 'Cloverhaven Way', 'Bianca Ln', 'GARDA CIR',
-  'York Ln', 'Warwick Dr', 'ALLEGHENY TRL', 'Grand Falls Cir',
-  'CHELSEA LN', 'Ashmill Dr', 'Tall Oak Ln', 'Hyannis St',
-  'Overglen Dr', 'Garda Cir', 'Falling Water Ln', 'Blackjack Oak Ln',
-  'Homewood Dr', 'Greenfield Dr', 'Trail Walker Dr', 'G Ave',
-  'Quill Dr', 'Kite Meadow Dr', 'BELLA VISTA DR', 'Rock Trl',
-  'Fieldlark Dr', 'Calhoun Ln', 'San Antonio Ct', 'Sassafras Dr',
-  'Biloxi Cir', 'North Star Rd', 'Mills Branch Cir',
-  'Judge Holland Ln', 'Van Gogh Dr', 'Angels Dr', 'Mantissa Dr',
-  'Rowlett Cemetery Rd', 'Heatherton Pl', 'HEDGCOXE RD',
-  'W Spring Creek Pkwy', 'Dodge Ct'];
-const streetNames = raw_streetNames.sort();
 
 export default LineChart;
