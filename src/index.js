@@ -12,6 +12,7 @@ root.render(
    <LoadingProvider>
    <GlobalSpinner /> 
    <App />
+   
  </LoadingProvider>
 );
 

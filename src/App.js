@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-d
 import { Container, Row, Col, Card, Button } from 'react-bootstrap';
 import './App.css';
 import LineChart from './LineChart';
-import BarChart from './BarChart';
+import PredictQuality from './PredictQuality';
 import PieChart from './PieChart';
 import NavigationBar from './NavigationBar';
 import { StreetProvider, StreetSelector } from './components/StreetSelector';
@@ -59,12 +59,11 @@ function App() {
           <Route path="/visualize" element={
             <MultiStreetProvider>
               <StreetProvider>
-                {/* <h2>Water Quality Data Visualization - Line Chart</h2> */}
                 <Container className="mt-5">
-      <h2 className="text-center mb-4 border-bottom border-info pb-2" style={{color:'Navy'}}>
-       Plano City Water Quality Data Visualization Charts
-      </h2>
-    </Container>
+                  <h2 className="text-center mb-4 border-bottom border-info pb-2" style={{color:'Navy'}}>
+                  Plano City Water Quality Data Visualization Charts
+                  </h2>
+                </Container>
                 <MultiStreetSelector streetNames={streets} />
                 <LineChart data={data} />
               </StreetProvider>
@@ -75,8 +74,13 @@ function App() {
           <Route path="/predict" element={
             <MultiStreetProvider>
               <StreetProvider>
+              <Container className="mt-5">
+                  <h2 className="text-center mb-4 border-bottom border-info pb-2" style={{color:'Navy'}}>
+                    Water Parameter Predictions <br/>using Machine Learning Model
+                  </h2>
+                </Container>
                 <MultiStreetSelector streetNames={streets} />
-                <BarChart data={data} />
+                <PredictQuality/>
               </StreetProvider>
             </MultiStreetProvider>
           } />
